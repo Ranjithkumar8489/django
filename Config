@@ -1,0 +1,25 @@
+import ccxt
+
+# Define exchange configurations
+exchange_configs = {
+    'binance': {
+        'apiKey': 'YOUR_BINANCE_API_KEY',
+        'secret': 'YOUR_BINANCE_SECRET_KEY',
+    },
+    'kraken': {
+        'apiKey': 'YOUR_KRAKEN_API_KEY',
+        'secret': 'YOUR_KRAKEN_SECRET_KEY',
+    },
+    # Add other exchanges as needed
+}
+
+def get_exchange(exchange_name):
+    config = exchange_configs.get(exchange_name)
+    if not config:
+        raise ValueError(f"Exchange configuration for {exchange_name} not found")
+    
+    exchange_class = getattr(ccxt, exchange_name)
+    return exchange_class({
+        'apiKey': config['apiKey'],
+        'secret': config['secret'],
+    })
