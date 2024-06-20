@@ -1,0 +1,60 @@
+import ccxt
+import time
+from exchange_config import get_exchange
+
+def fetch_order_book(exchange, symbol):
+    try:
+        return exchange.fetch_order_book(symbol)
+    except Exception as e:
+        print(f"Error fetching order book for {symbol} on {exchange.id}: {e}")
+        return None
+
+def calculate_arbitrage(opportunity):
+    bid_exchange, ask_exchange, symbol = opportunity
+    bid_order_book = fetch_order_book(bid_exchange, symbol)
+    ask_order_book = fetch_order_book(ask_exchange, symbol)
+
+    if not bid_order_book or not ask_order_book:
+        return None
+
+    highest_bid = bid_order_book['bids'][0][0] if bid_order_book['bids'] else None
+    lowest_ask = ask_order_book['asks'][0][0] if ask_order_book['asks'] else None
+
+    if highest_bid and lowest_ask:
+        profit_percentage = ((highest_bid - lowest_ask) / lowest_ask) * 100
+        return highest_bid, lowest_ask, profit_percentage
+    return None
+
+def main():
+    exchanges = ['binance', 'kraken']  # List of exchanges to check for arbitrage
+    symbol = 'BTC/USDT'  # Symbol to check for arbitrage opportunities
+
+    exchange_objects = {name: get_exchange(name) for name in exchanges}
+
+    while True:
+        opportunities = []
+
+        for bid_exchange_name, bid_exchange in exchange_objects.items():
+            for ask_exchange_name, ask_exchange in exchange_objects.items():
+                if bid_exchange_name != ask_exchange_name:
+                    opportunity = (bid_exchange, ask_exchange, symbol)
+                    result = calculate_arbitrage(opportunity)
+                    if result:
+                        highest_bid, lowest_ask, profit_percentage = result
+                        if profit_percentage > 0:
+                            opportunities.append({
+                                'bid_exchange': bid_exchange_name,
+                                'ask_exchange': ask_exchange_name,
+                                'highest_bid': highest_bid,
+                                'lowest_ask': lowest_ask,
+                                'profit_percentage': profit_percentage
+                            })
+
+        if opportunities:
+            for opp in opportunities:
+                print(f"Arbitrage Opportunity: Buy on {opp['ask_exchange']} at {opp['lowest_ask']} and sell on {opp['bid_exchange']} at {opp['highest_bid']} for a profit of {opp['profit_percentage']:.2f}%")
+
+        time.sleep(60)  # Sleep for 1 minute before checking again
+
+if __name__ == "__main__":
+    main()
