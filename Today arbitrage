@@ -1,0 +1,90 @@
+# arbitrage.py
+import ccxt
+from exchange_config import get_exchange
+
+def get_user_input():
+    symbol = input("Enter the trading symbol (e.g., BTC/USDT): ")
+    exchange_list = input("Enter the exchange list separated by commas (e.g., binance,kraken): ")
+    amount = float(input("Enter the trading amount: "))
+    return symbol, exchange_list.split(','), amount
+
+def fetch_order_book(exchange, symbol):
+    try:
+        order_book = exchange.fetch_order_book(symbol)
+        return order_book
+    except Exception as e:
+        print(f"Error fetching order book from {exchange.id}: {str(e)}")
+        return None
+
+def place_order(exchange, symbol, order_type, side, amount, price=None):
+    try:
+        if order_type == 'limit':
+            if side == 'buy':
+                order = exchange.create_limit_buy_order(symbol, amount, price)
+            else:
+                order = exchange.create_limit_sell_order(symbol, amount, price)
+        elif order_type == 'market':
+            if side == 'buy':
+                order = exchange.create_market_buy_order(symbol, amount)
+            else:
+                order = exchange.create_market_sell_order(symbol, amount)
+        print(f"Order placed: {order}")
+        return order
+    except Exception as e:
+        print(f"Error placing order on {exchange.id}: {str(e)}")
+        return None
+
+def find_arbitrage_opportunity(symbol, exchanges, amount):
+    order_books = {}
+
+    for exchange_id in exchanges:
+        exchange = get_exchange(exchange_id)
+        order_book = fetch_order_book(exchange, symbol)
+        if order_book:
+            order_books[exchange_id] = order_book
+
+    if len(order_books) < 2:
+        print("Not enough data to find arbitrage opportunities.")
+        return
+
+    highest_bid = {'exchange': None, 'price': 0}
+    lowest_ask = {'exchange': None, 'price': float('inf')}
+
+    for exchange_id, order_book in order_books.items():
+        bid_price = order_book['bids'][0][0] if order_book['bids'] else 0
+        ask_price = order_book['asks'][0][0] if order_book['asks'] else float('inf')
+
+        if bid_price > highest_bid['price']:
+            highest_bid['price'] = bid_price
+            highest_bid['exchange'] = exchange_id
+
+        if ask_price < lowest_ask['price']:
+            lowest_ask['price'] = ask_price
+            lowest_ask['exchange'] = exchange_id
+
+    if highest_bid['price'] > lowest_ask['price']:
+        profit = (highest_bid['price'] - lowest_ask['price']) * amount
+        print(f"Arbitrage opportunity found!")
+        print(f"Buy on {lowest_ask['exchange']} at {lowest_ask['price']}")
+        print(f"Sell on {highest_bid['exchange']} at {highest_bid['price']}")
+        print(f"Potential profit: {profit}")
+
+        buy_exchange = get_exchange(lowest_ask['exchange'])
+        sell_exchange = get_exchange(highest_bid['exchange'])
+
+        # Place Buy Order
+        buy_order = place_order(buy_exchange, symbol, 'limit', 'buy', amount, lowest_ask['price'])
+        
+        # Check if buy order was successful before placing the sell order
+        if buy_order:
+            # Place Sell Order
+            sell_order = place_order(sell_exchange, symbol, 'limit', 'sell', amount, highest_bid['price'])
+    else:
+        print("No arbitrage opportunity found.")
+
+def main():
+    symbol, exchange_list, amount = get_user_input()
+    find_arbitrage_opportunity(symbol, exchange_list, amount)
+
+if __name__ == "__main__":
+    main()
