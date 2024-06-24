@@ -1,0 +1,54 @@
+# views.py
+from django.core.mail import send_mail
+from django.conf import settings
+from django.shortcuts import render
+from django.contrib.auth.models import User
+from django.utils.crypto import get_random_string
+
+def password_reset_request(request):
+    if request.method == "POST":
+        form = PasswordResetForm(request.POST)
+        if form.is_valid():
+            email = form.cleaned_data['email']
+            user = User.objects.get(email=email)
+            token = get_random_string(length=32)
+            user.set_password(token)
+            user.save()
+            send_mail(
+                'Password Reset Request',
+                f'Use this token to reset your password: {token}',
+                settings.EMAIL_HOST_USER,
+                [email],
+                fail_silently=False,
+            )
+            return render(request, 'password_reset_done.html')
+    else:
+        form = PasswordResetForm()
+    return render(request, 'password_reset_form.html', {'form': form})
+
+
+# settings.py
+
+# Email backend configuration
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+
+# SMTP configuration for Gmail
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'your_email@gmail.com'  # Your Gmail email address
+EMAIL_HOST_PASSWORD = 'your_password'  # Your Gmail password or app password
+
+
+# forms.py
+from django import forms
+from django.contrib.auth.models import User
+
+class PasswordResetForm(forms.Form):
+    email = forms.EmailField()
+
+    def clean_email(self):
+        email = self.cleaned_data['email']
+        if not User.objects.filter(email=email).exists():
+            raise forms.ValidationError("Email does not exist.")
+        return email
