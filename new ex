@@ -58,6 +58,48 @@ def arbitrage(symbol, amount, exchanges):
         print("Arbitrage successful!")
         return profit
 
+
+import ccxt
+
+# Define exchange configurations
+exchanges = {
+    'binance': {
+        'apiKey': 'w1cAKLgXy7AV7XBC57nybYeVyU9C8GHXQUnuHhwkxHH71og7TnODGLvFfKlLz25f',
+        'secret': 'hOCJ2Hz0A8hpMpRC5JecCNCdkncHwWVDS7oV9mfi2iFm41S0cwcxN99VOq5yTcNB',
+        'enableRateLimit': True,
+        'options': {
+            'sandbox': True  # Enable sandbox mode
+        }
+    },
+    # 'kraken': {
+    #     'apiKey': 'YOUR_KRAKEN_API_KEY',
+    #     'secret': 'YOUR_KRAKEN_SECRET_KEY',
+    #     'enableRateLimit': True
+    # },
+        'kucoin': {
+        'apiKey': 'YOUR_KRAKEN_API_KEY',
+        'secret': 'YOUR_KRAKEN_SECRET_KEY',
+        'enableRateLimit': True
+    },
+    # Add more exchanges as needed
+}
+
+# Create exchange objects
+exchange_objects = {name: getattr(ccxt, name)(config) for name, config in exchanges.items()}
+
+
+from django.http import HttpResponse
+from .arbitrage import arbitrage
+
+def arbitrage_view(request):
+    symbol = "TRX/USDT"
+    amount = 500.0
+
+    result = arbitrage(symbol, amount,exchanges=["binance","kucoin","kraken"])
+    return HttpResponse(result)
+
+
+
     except Exception as e:
         print(f"Error during arbitrage: {e}")
         return 0
