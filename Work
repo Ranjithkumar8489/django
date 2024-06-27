@@ -1,0 +1,122 @@
+from .exchange_config import exchange_objects
+
+def arbitrage(symbol, amount, exchanges):
+    try:
+        min_ask_price = float('inf')
+        max_bid_price = 0
+        min_ask_exchange = None
+        max_bid_exchange = None
+
+        # Find exchanges with min ask price and max bid price
+        for exchange_name in exchanges:
+            exchange = exchange_objects.get(exchange_name)
+            if not exchange:
+                print(f"Exchange '{exchange_name}' not found. Skipping.")
+                continue
+
+            # Fetch prices
+            ticker = exchange.fetch_ticker(symbol)
+            if not ticker:
+                print(f"Failed to fetch ticker for {symbol} on {exchange_name}. Skipping.")
+                continue
+
+            bid_price = ticker['bid']
+            ask_price = ticker['ask']
+
+            if ask_price < min_ask_price:
+                min_ask_price = ask_price
+                min_ask_exchange = exchange_name
+
+            if bid_price > max_bid_price:
+                max_bid_price = bid_price
+                max_bid_exchange = exchange_name
+
+        if not min_ask_exchange or not max_bid_exchange:
+            print("Could not find suitable exchanges for arbitrage.")
+            return 0
+
+        print(f"Buy from {min_ask_exchange} at {min_ask_price} and sell on {max_bid_exchange} at {max_bid_price}")
+
+        # Execute buy order on exchange with min ask price
+        buy_exchange = exchange_objects[min_ask_exchange]
+        buy_order = buy_exchange.create_limit_buy_order(symbol, amount, min_ask_price)
+        if not buy_order:
+            print(f"Buy order on {min_ask_exchange} failed. Aborting arbitrage.")
+            return 0
+
+        buy_order_details = {
+            'exchange': min_ask_exchange,
+            'order': buy_order
+        }
+        print(f"Buy order placed on {min_ask_exchange} successfully.")
+
+        # Execute sell order on exchange with max bid price
+        sell_exchange = exchange_objects[max_bid_exchange]
+        sell_order = sell_exchange.create_limit_sell_order(symbol, amount, max_bid_price)
+        if not sell_order:
+            print(f"Sell order on {max_bid_exchange} failed. Aborting arbitrage.")
+            return 0
+
+        sell_order_details = {
+            'exchange': max_bid_exchange,
+            'order': sell_order
+        }
+        print(f"Sell order placed on {max_bid_exchange} successfully.")
+
+        # Calculate profit
+        buy_total = min_ask_price * amount
+        sell_total = max_bid_price * amount
+        profit = sell_total - buy_total
+
+        print("Arbitrage successful!")
+        return {
+            'profit': profit,
+            'buy_order_details': buy_order_details,
+            'sell_order_details': sell_order_details
+        }
+
+    except Exception as e:
+        print(f"Error during arbitrage: {e}")
+        return 0
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Arbitrage Result</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-4">
+        <h1 class="text-2xl font-bold mb-4">Arbitrage Result</h1>
+
+        {% if result != 0 %}
+            <div class="bg-white shadow-md rounded p-4 mb-4">
+                <h2 class="text-xl font-semibold mb-2">Profit</h2>
+                <p class="text-green-600">${{ result.profit }}</p>
+            </div>
+
+            <div class="bg-white shadow-md rounded p-4 mb-4">
+                <h2 class="text-xl font-semibold mb-2">Buy Order Details</h2>
+                <p><strong>Exchange:</strong> {{ result.buy_order_details.exchange }}</p>
+                <p><strong>Order ID:</strong> {{ result.buy_order_details.order.id }}</p>
+                <p><strong>Price:</strong> {{ result.buy_order_details.order.price }}</p>
+                <p><strong>Amount:</strong> {{ result.buy_order_details.order.amount }}</p>
+                <p><strong>Status:</strong> {{ result.buy_order_details.order.status }}</p>
+            </div>
+
+            <div class="bg-white shadow-md rounded p-4 mb-4">
+                <h2 class="text-xl font-semibold mb-2">Sell Order Details</h2>
+                <p><strong>Exchange:</strong> {{ result.sell_order_details.exchange }}</p>
+                <p><strong>Order ID:</strong> {{ result.sell_order_details.order.id }}</p>
+                <p><strong>Price:</strong> {{ result.sell_order_details.order.price }}</p>
+                <p><strong>Amount:</strong> {{ result.sell_order_details.order.amount }}</p>
+                <p><strong>Status:</strong> {{ result.sell_order_details.order.status }}</p>
+            </div>
+        {% else %}
+            <div class="bg-red-100 text-red-600 p-4 rounded">
+                <p>Error during arbitrage. Please try again.</p>
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html>
