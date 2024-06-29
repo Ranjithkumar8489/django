@@ -1,0 +1,88 @@
+# crypto_app/crypto_list.py
+import asyncio
+import ccxt.async_support as ccxt  # Import async version of ccxt
+
+async def fetch_exchange_data(exchange_name):
+    try:
+        exchange = getattr(ccxt, exchange_name)()
+        markets = await exchange.load_markets()
+        symbols = list(markets.keys())
+        ohlcvs = {}
+        for symbol in symbols[:5]:  # Limit to the first 5 symbols for demo purposes
+            try:
+                ohlcv = await exchange.fetch_ohlcv(symbol, timeframe='1d', limit=1)
+                if ohlcv:
+                    ohlcvs[symbol] = {
+                        'open': ohlcv[0][1],
+                        'high': ohlcv[0][2],
+                        'low': ohlcv[0][3],
+                        'close': ohlcv[0][4],
+                    }
+            except Exception as e:
+                ohlcvs[symbol] = {'error': str(e)}
+        await exchange.close()
+        return {exchange_name: ohlcvs}
+    except Exception as e:
+        return {exchange_name: {'error': str(e)}}
+
+async def get_all_crypto_details():
+    exchange_names = ccxt.exchanges
+    tasks = [fetch_exchange_data(exchange) for exchange in exchange_names]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    crypto_details = {}
+    for result in results:
+        crypto_details.update(result)
+
+    return crypto_details
+
+from django.shortcuts import render
+from .crypto_list import get_all_crypto_details as fetch_crypto_details
+
+async def get_all_crypto_details_view(request):
+    crypto_details = await fetch_crypto_details()
+    return render(request, 'crypto_app/crypto_details.html', {'crypto_details': crypto_details})
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Details</title>
+</head>
+<body>
+    <h1>Crypto Details</h1>
+    {% for exchange, data in crypto_details.items %}
+        <h2>{{ exchange }}</h2>
+        {% if data.error %}
+            <p>Error: {{ data.error }}</p>
+        {% else %}
+            <table border="1">
+                <tr>
+                    <th>Symbol</th>
+                    <th>Open</th>
+                    <th>High</th>
+                    <th>Low</th>
+                    <th>Close</th>
+                </tr>
+                {% for symbol, ohlcv in data.items %}
+                    {% if ohlcv.error %}
+                        <tr>
+                            <td>{{ symbol }}</td>
+                            <td colspan="4">Error: {{ ohlcv.error }}</td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td>{{ symbol }}</td>
+                            <td>{{ ohlcv.open }}</td>
+                            <td>{{ ohlcv.high }}</td>
+                            <td>{{ ohlcv.low }}</td>
+                            <td>{{ ohlcv.close }}</td>
+                        </tr>
+                    {% endif %}
+                {% endfor %}
+            </table>
+        {% endif %}
+    {% endfor %}
+</body>
+</html>
