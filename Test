@@ -1,0 +1,86 @@
+from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
+from django.db import models
+
+class UserAccounts(AbstractBaseUser, PermissionsMixin):
+    email = models.EmailField(unique=True)
+    name = models.CharField(max_length=255)
+    password = models.CharField(max_length=128)  # Adding password field explicitly
+    is_active = models.BooleanField(default=True)
+
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['name']
+
+    def __str__(self):
+        return self.email
+
+    def save(self, *args, **kwargs):
+        if not self.pk:
+            self.set_password(self.password)
+        super().save(*args, **kwargs)
+
+from django import forms
+from .models import UserAccounts
+
+class CustomUserCreationForm(forms.ModelForm):
+    password1 = forms.CharField(label='Password', widget=forms.PasswordInput)
+    password2 = forms.CharField(label='Confirm password', widget=forms.PasswordInput)
+
+    class Meta:
+        model = UserAccounts
+        fields = ('name', 'email')
+
+    def clean_password2(self):
+        password1 = self.cleaned_data.get("password1")
+        password2 = self.cleaned_data.get("password2")
+        if password1 and password2 and password1 != password2:
+            raise forms.ValidationError("Passwords don't match")
+        return password2
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.set_password(self.cleaned_data["password1"])
+        if commit:
+            user.save()
+        return user
+
+from django.shortcuts import render, redirect
+from django.contrib.auth import login, authenticate, logout
+from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth.decorators import login_required
+from .forms import CustomUserCreationForm
+
+def register(request):
+    if request.method == 'POST':
+        form = CustomUserCreationForm(request.POST)
+        if form.is_valid():
+            form.save()
+            email = form.cleaned_data.get('email')
+            raw_password = form.cleaned_data.get('password1')
+            user = authenticate(email=email, password=raw_password)
+            login(request, user)
+            return redirect('home')
+    else:
+        form = CustomUserCreationForm()
+    return render(request, 'your_app/register.html', {'form': form})
+
+def custom_login(request):
+    if request.method == 'POST':
+        form = AuthenticationForm(request, data=request.POST)
+        if form.is_valid():
+            email = form.cleaned_data.get('username')
+            password = form.cleaned_data.get('password')
+            user = authenticate(email=email, password=password)
+            if user is not None:
+                login(request, user)
+                return redirect('home')
+    else:
+        form = AuthenticationForm()
+    return render(request, 'your_app/login.html', {'form': form})
+
+def custom_logout(request):
+    logout(request)
+    return redirect('login')
+
+@login_required
+def home(request):
+    return render(request, 'your_app/home.html')
