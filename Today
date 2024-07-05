@@ -1,0 +1,57 @@
+# Create a file, e.g., auth_backends.py in your Django app
+from django.contrib.auth.backends import BaseBackend
+from .models import CustomUser  # Replace with your user model if different
+from django.contrib.auth.hashers import check_password
+
+class EmailAuthBackend(BaseBackend):
+    def authenticate(self, request, email=None, password=None, **kwargs):
+        try:
+            user = CustomUser.objects.get(email=email)
+            if user.check_password(password):
+                return user
+        except CustomUser.DoesNotExist:
+            return None
+        except Exception as e:
+            return None
+
+    def get_user(self, user_id):
+        try:
+            return CustomUser.objects.get(pk=user_id)
+        except CustomUser.DoesNotExist:
+            return None
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
+
+class CustomUserManager(BaseUserManager):
+    def create_user(self, email, password=None, **extra_fields):
+        if not email:
+            raise ValueError('The Email field must be set')
+        email = self.normalize_email(email)
+        user = self.model(email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, email, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+
+        return self.create_user(email, password, **extra_fields)
+
+class CustomUser(AbstractBaseUser):
+    email = models.EmailField(unique=True)
+    is_active = models.BooleanField(default=True)
+    is_staff = models.BooleanField(default=False)
+
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = []
+
+    objects = CustomUserManager()
+
+    def __str__(self):
+        return self.email
+
+    def has_perm(self, perm, obj=None):
+        return self.is_staff
+
+    def has_module_perms(self, app_label):
+        return self.is_staff
