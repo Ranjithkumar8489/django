@@ -1,0 +1,69 @@
+from django import forms
+
+class ExchangeForm(forms.Form):
+    exchange_name = forms.CharField(label='Exchange Name', max_length=100)
+    api_key = forms.CharField(label='API Key', max_length=100)
+    secret_key = forms.CharField(label='Secret Key', max_length=100)
+    password = forms.CharField(label='Password', max_length=100, required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Hide the password field by default
+        self.fields['password'].widget = forms.HiddenInput()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        exchange_name = cleaned_data.get('exchange_name')
+        if exchange_name == 'kucoin':
+            # Make the password field required if exchange_name is 'kucoin'
+            self.fields['password'].required = True
+            self.fields['password'].widget = forms.PasswordInput()
+        else:
+            # Make the password field not required for other exchange names
+            self.fields['password'].required = False
+            self.fields['password'].widget = forms.HiddenInput()
+
+     
+
+return cleaned_data
+
+
+<!-- exchange_form.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Exchange Form</title>
+</head>
+<body>
+    <h2>Enter Exchange Details</h2>
+    <form method="post">
+        {% csrf_token %}
+        
+        <!-- Render other fields -->
+        <p>
+            <label for="id_exchange_name">Exchange Name:</label>
+            {{ form.exchange_name }}
+        </p>
+        <p>
+            <label for="id_api_key">API Key:</label>
+            {{ form.api_key }}
+        </p>
+        <p>
+            <label for="id_secret_key">Secret Key:</label>
+            {{ form.secret_key }}
+        </p>
+        
+        <!-- Conditional rendering for the password field -->
+        {% if form.exchange_name.value == 'kucoin' %}
+            <p>
+                <label for="id_password">Password:</label>
+                {{ form.password }}
+            </p>
+        {% endif %}
+        
+        <button type="submit">Submit</button>
+    </form>
+</body>
+</html>
