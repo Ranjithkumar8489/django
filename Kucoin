@@ -35,10 +35,47 @@ return cleaned_data
 <head>
     <meta charset="UTF-8">
     <title>Exchange Form</title>
+    <!-- Include jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    
+    <!-- Include jQuery Validate -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-validate/1.19.3/jquery.validate.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            // Initialize jQuery Validate plugin on your form
+            $('#exchangeForm').validate({
+                rules: {
+                    exchange_name: {
+                        required: true
+                    },
+                    api_key: {
+                        required: true
+                    },
+                    secret_key: {
+                        required: true
+                    },
+                    password: {
+                        {% if form.exchange_name.value == 'kucoin' %}
+                            required: true
+                        {% else %}
+                            required: false
+                        {% endif %}
+                    }
+                },
+                messages: {
+                    exchange_name: "Please enter the exchange name",
+                    api_key: "Please enter the API key",
+                    secret_key: "Please enter the secret key",
+                    password: "Please enter the password"
+                }
+            });
+        });
+    </script>
 </head>
 <body>
     <h2>Enter Exchange Details</h2>
-    <form method="post">
+    <form id="exchangeForm" method="post">
         {% csrf_token %}
         
         <!-- Render other fields -->
@@ -67,3 +104,4 @@ return cleaned_data
     </form>
 </body>
 </html>
+
