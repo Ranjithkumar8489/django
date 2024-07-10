@@ -1,0 +1,177 @@
+# views.py
+
+import logging
+from django.http import JsonResponse
+
+logger = logging.getLogger('django')
+
+def fetch_log_content(request):
+    # Read the log file content
+    with open('debug.log', 'r') as log_file:
+        log_content = log_file.read()
+    
+    # Return JSON response with log content
+    return JsonResponse({'log_content': log_content})
+
+<!-- your_template.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Log Information</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            function fetchAndUpdateLogContent() {
+                $.ajax({
+                    url: "{% url 'fetch_log_content' %}",
+                    type: 'GET',
+                    dataType: 'json',
+                    success: function(data) {
+                        $('#log-content').text(data.log_content);
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error fetching log content:', error);
+                    }
+                });
+            }
+
+            // Fetch and update log content every 10 seconds (adjust as needed)
+            setInterval(fetchAndUpdateLogContent, 10000);  // Every 10 seconds
+        });
+    </script>
+</head>
+<body>
+    <h1>Log Information</h1>
+    <pre id="log-content">
+        <!-- Initial or placeholder content -->
+        Loading...
+    </pre>
+</body>
+</html>
+
+# urls.py
+
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    path('fetch_log_content/', views.fetch_log_content, name='fetch_log_content'),
+    # Other URL patterns
+]
+
+or-------------------------------------------------------------------------------------------------------
+
+
+pip install channels
+
+# settings.py
+
+ASGI_APPLICATION = 'your_project_name.asgi.application'
+
+
+# asgi.py
+
+import os
+from django.core.asgi import get_asgi_application
+from channels.routing import ProtocolTypeRouter, URLRouter
+from channels.auth import AuthMiddlewareStack
+import your_app.routing
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'your_project_name.settings')
+
+application = ProtocolTypeRouter({
+    "http": get_asgi_application(),
+    "websocket": AuthMiddlewareStack(
+        URLRouter(
+            your_app.routing.websocket_urlpatterns
+        )
+    ),
+})
+
+
+# consumers.py
+
+from channels.generic.websocket import AsyncWebsocketConsumer
+import logging
+
+logger = logging.getLogger('django')
+
+class LogConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        pass
+
+    async def fetch_log_content(self, event):
+        # Read the log file content
+        with open('debug.log', 'r') as log_file:
+            log_content = log_file.read()
+        
+        # Send log content to the client
+        await self.send(text_data=log_content)
+
+# consumers.py
+
+from channels.generic.websocket import AsyncWebsocketConsumer
+import logging
+
+logger = logging.getLogger('django')
+
+class LogConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        pass
+
+    async def fetch_log_content(self, event):
+        # Read the log file content
+        with open('debug.log', 'r') as log_file:
+            log_content = log_file.read()
+        
+        # Send log content to the client
+        await self.send(text_data=log_content)
+
+
+# routing.py (inside your_app directory)
+
+from django.urls import re_path
+from . import consumers
+
+websocket_urlpatterns = [
+    re_path(r'ws/log/$', consumers.LogConsumer.as_asgi()),
+]
+
+
+<!-- your_template.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Log Information</title>
+    <script>
+        // WebSocket connection
+        const socket = new WebSocket('ws://' + window.location.host + '/ws/log/');
+
+        socket.onmessage = function(event) {
+            document.getElementById('log-content').textContent = event.data;
+        };
+
+        socket.onclose = function(event) {
+            console.error('WebSocket closed unexpectedly');
+        };
+    </script>
+</head>
+<body>
+    <h1>Log Information</h1>
+    <pre id="log-content">
+        <!-- Initial or placeholder content -->
+        Loading...
+    </pre>
+</body>
+</html>
+
