@@ -1,0 +1,65 @@
+# bot.py
+
+def run_bot_continuously(symbol, amount, exchanges, interval):
+    # Your bot logic here
+    # For demonstration, let's just return a string
+    return f"Bot ran with symbol {symbol}, amount {amount}, exchanges {exchanges}, interval {interval}"
+
+
+# threads.py
+
+import threading
+
+class ResultThread(threading.Thread):
+    def __init__(self, target, *args, **kwargs):
+        super().__init__(target=target, args=args, kwargs=kwargs)
+        self._target = target
+        self._args = args
+        self._kwargs = kwargs
+        self._result = None
+
+    def run(self):
+        self._result = self._target(*self._args, **self._kwargs)
+
+    def get_result(self):
+        self.join()
+        return self._result
+
+
+# views.py
+
+from django.http import JsonResponse
+from .threads import ResultThread  # Import your custom thread class
+from .bot import run_bot_continuously  # Import the bot function
+
+bot_thread = None
+bot_running = False
+
+def start_bot_view(request):
+    global bot_thread, bot_running
+    if bot_running:
+        return JsonResponse({"status": "Bot already running."})
+    
+    symbol = "TRX/USDT"
+    amount = 500.0
+    exchanges = ["binance", "kucoin", "kraken"]
+    interval = 60  # Run the bot every 60 seconds
+    
+    bot_running = True
+    bot_thread = ResultThread(target=run_bot_continuously, args=(symbol, amount, exchanges, interval))
+    bot_thread.start()
+    
+    return JsonResponse({"status": "Bot started."})
+
+def stop_bot_view(request):
+    global bot_running
+    if not bot_running:
+        return JsonResponse({"status": "Bot is not running."})
+    
+    bot_running = False
+    if bot_thread:
+        bot_thread.join()
+        result = bot_thread.get_result()  # Get the result after the thread stops
+        return JsonResponse({"status": "Bot stopped.", "result": result})
+    
+    return JsonResponse({"status": "Bot stopped."})
