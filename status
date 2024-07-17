@@ -1,0 +1,55 @@
+# Assuming you have a custom user model or using Django's default User model
+from django.db import models
+from django.contrib.auth.models import User
+
+class BotStatus(models.Model):
+    running = models.BooleanField(default=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return f"Bot Status for {self.user.username}"
+
+from django.shortcuts import JsonResponse, get_object_or_404
+from django.contrib.auth.decorators import login_required
+import threading
+from .models import BotStatus
+from .arbitrage import run_bot_continuously
+
+@login_required
+def start_bot_view(request):
+    # Check if bot is already running for the current user
+    bot_status, created = BotStatus.objects.get_or_create(user=request.user)
+    if bot_status.running:
+        return JsonResponse({"status": "Bot already running."})
+    
+    # Start the bot
+    symbol = "TRX/USDT"
+    amount = 500.0
+    exchanges = ["binance", "kucoin", "kraken"]
+    interval = 60  # Run the bot every 60 seconds
+    
+    bot_status.running = True
+    bot_status.save()
+    
+    # Start bot thread
+    bot_thread = threading.Thread(target=run_bot_continuously, args=(symbol, amount, exchanges, interval))
+    bot_thread.start()
+    
+    return JsonResponse({"status": "Bot started."})
+
+@login_required
+def stop_bot_view(request):
+    # Check if bot is running for the current user
+    bot_status = get_object_or_404(BotStatus, user=request.user)
+    if not bot_status.running:
+        return JsonResponse({"status": "Bot is not running."})
+    
+    # Stop the bot
+    bot_status.running = False
+    bot_status.save()
+    
+    # Join bot thread (if it exists)
+    # Note: You may need to handle the threading aspect based on your specific implementation
+    # to gracefully stop the bot thread.
+    
+    return JsonResponse({"status": "Bot stopped."})
