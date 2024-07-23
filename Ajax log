@@ -1,0 +1,102 @@
+from django.http import JsonResponse
+from django.shortcuts import render
+from your_app.models import LogEntry  # Adjust import according to your app's name
+
+def log_list(request):
+    query = request.GET.get('q', '')
+    log_type = request.GET.get('log_type', '')
+
+    logs = LogEntry.objects.all()
+    if query:
+        logs = logs.filter(message__icontains=query)
+    if log_type:
+        logs = logs.filter(log_type=log_type)
+
+    # If AJAX request, return JSON response
+    if request.is_ajax():
+        logs_data = list(logs.values('timestamp', 'log_type', 'message', 'user__username'))
+        return JsonResponse({'logs': logs_data})
+
+    # Render the full template
+    return render(request, 'log_list.html', {'logs': logs})
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Log List</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        /* Add any custom styles here */
+    </style>
+</head>
+<body>
+    <h1>Log List</h1>
+    <form id="filter-form">
+        <input type="text" name="q" placeholder="Search..." value="{{ request.GET.q }}">
+        <select name="log_type">
+            <option value="">All Types</option>
+            {% for choice in logs.model.LOG_TYPE_CHOICES %}
+                <option value="{{ choice.0 }}" {% if request.GET.log_type == choice.0 %}selected{% endif %}>{{ choice.1 }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit">Filter</button>
+    </form>
+    
+    <table id="log-table">
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Type</th>
+                <th>Message</th>
+                <th>User</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr>
+                <td>{{ log.timestamp }}</td>
+                <td>{{ log.get_log_type_display }}</td>
+                <td>{{ log.message }}</td>
+                <td>{{ log.user.username if log.user else 'N/A' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <script>
+        $(document).ready(function() {
+            function loadLogs() {
+                $.ajax({
+                    url: '',
+                    data: $('#filter-form').serialize(),
+                    success: function(data) {
+                        var tableBody = $('#log-table tbody');
+                        tableBody.empty();
+                        $.each(data.logs, function(index, log) {
+                            tableBody.append(
+                                '<tr>' +
+                                '<td>' + log.timestamp + '</td>' +
+                                '<td>' + log.log_type + '</td>' +
+                                '<td>' + log.message + '</td>' +
+                                '<td>' + (log.user__username || 'N/A') + '</td>' +
+                                '</tr>'
+                            );
+                        });
+                    },
+                    error: function() {
+                        alert('Error loading logs.');
+                    }
+                });
+            }
+
+            $('#filter-form').on('submit', function(event) {
+                event.preventDefault();
+                loadLogs();
+            });
+
+            // Initial load
+            loadLogs();
+        });
+    </script>
+</body>
+</html>
