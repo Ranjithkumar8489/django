@@ -1,0 +1,92 @@
+# logs/models.py
+from django.db import models
+from django.utils import timezone
+from django.contrib.auth.models import User
+
+class LogEntry(models.Model):
+    LOG_TYPE_CHOICES = [
+        ('INFO', 'Info'),
+        ('ERROR', 'Error'),
+        ('TRADE', 'Trade'),
+        # Add more log types as needed
+    ]
+    
+    timestamp = models.DateTimeField(default=timezone.now)
+    log_type = models.CharField(max_length=10, choices=LOG_TYPE_CHOICES)
+    message = models.TextField()
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.timestamp} - {self.log_type} - {self.message}"
+
+# logs/utils.py
+from .models import LogEntry
+from django.utils import timezone
+
+def log_event(log_type, message, user=None):
+    log_entry = LogEntry(
+        log_type=log_type,
+        message=message,
+        user=user,
+        timestamp=timezone.now()
+    )
+    log_entry.save()
+
+# logs/views.py
+from django.shortcuts import render
+from .models import LogEntry
+
+def log_list(request):
+    query = request.GET.get('q')
+    log_type = request.GET.get('log_type')
+    
+    logs = LogEntry.objects.all().order_by('-timestamp')[:50]
+    
+    if query:
+        logs = logs.filter(message__icontains=query)
+        
+    if log_type:
+        logs = logs.filter(log_type=log_type)
+        
+    context = {
+        'logs': logs
+    }
+    
+    return render(request, 'logs/log_list.html', context)
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Log List</title>
+</head>
+<body>
+    <h1>Log List</h1>
+    <form method="get">
+        <input type="text" name="q" placeholder="Search..." value="{{ request.GET.q }}">
+        <select name="log_type">
+            <option value="">All Types</option>
+            {% for choice in logs.model.LOG_TYPE_CHOICES %}
+                <option value="{{ choice.0 }}" {% if request.GET.log_type == choice.0 %}selected{% endif %}>{{ choice.1 }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit">Filter</button>
+    </form>
+    <table>
+        <tr>
+            <th>Timestamp</th>
+            <th>Type</th>
+            <th>Message</th>
+            <th>User</th>
+        </tr>
+        {% for log in logs %}
+        <tr>
+            <td>{{ log.timestamp }}</td>
+            <td>{{ log.get_log_type_display }}</td>
+            <td>{{ log.message }}</td>
+            <td>{{ log.user.username if log.user else 'N/A' }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
+
