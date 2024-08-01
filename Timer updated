@@ -1,0 +1,188 @@
+from django.db import models
+from django.contrib.auth.models import User
+from datetime import timedelta
+
+class Payment(models.Model):
+    PAYMENT_TYPE_CHOICES = [
+        ('credit', 'Credit'),
+        ('debit', 'Debit'),
+        ('paypal', 'PayPal'),
+        ('cash', 'Cash'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    payment_type = models.CharField(max_length=10, choices=PAYMENT_TYPE_CHOICES)
+    date = models.DateTimeField(auto_now_add=True)
+    expiry_date = models.DateTimeField()
+
+    def __str__(self):
+        return f"{self.user.username} - {self.amount} - {self.payment_type}"
+
+class TradeSettings(models.Model):
+    SUBSCRIPTION_CHOICES = [
+        ('monthly', 'Monthly'),
+        ('yearly', 'Yearly'),
+    ]
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    subscription = models.CharField(max_length=7, choices=SUBSCRIPTION_CHOICES)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.subscription}"
+
+from django import forms
+from .models import Payment, TradeSettings
+
+class PaymentForm(forms.ModelForm):
+    class Meta:
+        model = Payment
+        fields = ['amount', 'payment_type']
+
+class TradeSettingsForm(forms.ModelForm):
+    class Meta:
+        model = TradeSettings
+        fields = ['subscription']
+
+
+from datetime import datetime, timedelta
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
+from .models import Payment, TradeSettings
+from .forms import PaymentForm
+
+@login_required
+def create_payment(request):
+    form = PaymentForm()
+    expiry_date = None
+
+    if request.method == 'POST':
+        form = PaymentForm(request.POST)
+        if form.is_valid():
+            user = request.user
+            payment, created = Payment.objects.get_or_create(
+                user=user,
+                defaults={
+                    'amount': form.cleaned_data['amount'],
+                    'payment_type': form.cleaned_data['payment_type'],
+                    'date': datetime.now()
+                }
+            )
+
+            # Calculate the expiry date based on the user's trade settings
+            try:
+                trade_settings = TradeSettings.objects.get(user=user)
+                current_date = datetime.now()
+                if trade_settings.subscription == 'monthly':
+                    expiry_date = current_date + timedelta(days=30)
+                elif trade_settings.subscription == 'yearly':
+                    expiry_date = current_date + timedelta(days=365)
+            except TradeSettings.DoesNotExist:
+                expiry_date = datetime.now()  # Default expiry date if no subscription found
+
+            if created:
+                payment.expiry_date = expiry_date
+            else:
+                payment.expiry_date = max(payment.expiry_date, expiry_date)
+
+            payment.save()
+            return redirect('payment_success')
+
+    return render(request, 'create_payment.html', {'form': form, 'expiry_date': expiry_date})
+
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create Payment</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .countdown-container {
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: .5rem;
+            background-color: #ffffff;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .countdown {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #17a2b8; /* Bootstrap info color */
+        }
+        .form-container {
+            margin-top: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: .5rem;
+            background-color: #ffffff;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .form-header {
+            border-bottom: 2px solid #17a2b8;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <!-- Form Container -->
+        <div class="form-container">
+            <h2 class="form-header">Create Payment</h2>
+            <form method="post">
+                {% csrf_token %}
+                {{ form.as_p }}
+                <button type="submit" class="btn btn-primary btn-block">Submit Payment</button>
+            </form>
+        </div>
+
+        <!-- Countdown Timer Section -->
+        <div class="countdown-container text-center">
+            <h3>Subscription Expiry Countdown</h3>
+            <div id="countdown" class="countdown">Calculating...</div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS and dependencies -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var expiryDateString = "{{ expiry_date }}";
+
+            if (expiryDateString) {
+                var expiryDate = new Date(expiryDateString);
+
+                function updateCountdown() {
+                    var now = new Date();
+                    var timeDifference = expiryDate - now;
+
+                    if (timeDifference <= 0) {
+                        document.getElementById('countdown').style.display = 'none';
+                        clearInterval(countdownInterval);
+                        return;
+                    }
+
+                    var days = Math.floor(timeDifference / (1000 * 60 * 60 * 24));
+                    var hours = Math.floor((timeDifference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                    var minutes = Math.floor((timeDifference % (1000 * 60 * 60)) / (1000 * 60));
+                    var seconds = Math.floor((timeDifference % (1000 * 60)) / 1000);
+
+                    document.getElementById('countdown').innerText =
+                        days + "d " + hours + "h " + minutes + "m " + seconds + "s ";
+                }
+
+                var countdownInterval = setInterval(updateCountdown, 1000);
+                updateCountdown();
+            } else {
+                document.getElementById('countdown').innerText = "Expiry date not set";
+            }
+        });
+    </script>
+</body>
+</html>
+
