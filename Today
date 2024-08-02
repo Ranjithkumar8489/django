@@ -1,0 +1,164 @@
+from django.shortcuts import render, get_object_or_404
+from django.utils import timezone
+from .models import Event
+
+def event_detail(request, event_id):
+    event = get_object_or_404(Event, id=event_id)
+    current_time = timezone.now()
+    time_left = event.expiry_date - current_time
+    
+    # Check if the event has expired and update if necessary
+    if time_left.total_seconds() <= 0:
+        event.payment_type = 'expired'
+        event.save()
+        time_left = timezone.timedelta()  # Set time left to 0 for display purposes
+    
+    context = {
+        'event': event,
+        'current_time': current_time,
+        'time_left': time_left,
+    }
+    return render(request, 'event_detail.html', context)
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Detail</title>
+    <style>
+        .countdown {
+            font-size: 2em;
+            font-weight: bold;
+            color: #333;
+        }
+        .expired {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <h1>{{ event.title }}</h1>
+    <p>{{ event.description }}</p>
+    <p>Event Date: {{ event.expiry_date }}</p>
+    <p>Current Time: {{ current_time }}</p>
+
+    {% if time_left.total_seconds <= 0 %}
+        <p class="expired">The event has expired!</p>
+    {% else %}
+        <div class="countdown">
+            <p>Time Left:</p>
+            <p id="countdown"></p>
+        </div>
+
+        <script>
+            function updateCountdown() {
+                var timeLeft = "{{ time_left.total_seconds }}";
+                var timeLeftMilliseconds = parseFloat(timeLeft) * 1000;
+                var countdownElement = document.getElementById("countdown");
+                
+                if (timeLeftMilliseconds <= 0) {
+                    countdownElement.innerHTML = "Event has ended!";
+                    return;
+                }
+                
+                var interval = setInterval(function() {
+                    var days = Math.floor(timeLeftMilliseconds / (1000 * 60 * 60 * 24));
+                    var hours = Math.floor((timeLeftMilliseconds % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                    var minutes = Math.floor((timeLeftMilliseconds % (1000 * 60 * 60)) / (1000 * 60));
+                    var seconds = Math.floor((timeLeftMilliseconds % (1000 * 60)) / 1000);
+                    
+                    countdownElement.innerHTML = days + "d " + hours + "h " + minutes + "m " + seconds + "s ";
+                    
+                    timeLeftMilliseconds -= 1000;
+                    
+                    if (timeLeftMilliseconds <= 0) {
+                        clearInterval(interval);
+                        countdownElement.innerHTML = "Event has ended!";
+                    }
+                }, 1000);
+            }
+            
+            updateCountdown();
+        </script>
+    {% endif %}
+</body>
+</html>
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Detail</title>
+    <style>
+        .countdown {
+            font-size: 2em;
+            font-weight: bold;
+            color: #333;
+        }
+        .expired {
+            color: red;
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>{{ event.title }}</h1>
+    <p>{{ event.description }}</p>
+    <p>Event Date: {{ event.expiry_date }}</p>
+    <p>Current Time: {{ current_time }}</p>
+
+    <div class="countdown {% if time_left.total_seconds <= 0 %}hidden{% endif %}">
+        <p>Time Left:</p>
+        <p id="countdown"></p>
+    </div>
+    <p class="expired {% if time_left.total_seconds > 0 %}hidden{% endif %}" id="expired-message">The event has expired!</p>
+
+    <script>
+        function updateCountdown() {
+            var timeLeft = "{{ time_left.total_seconds }}";
+            var timeLeftMilliseconds = parseFloat(timeLeft) * 1000;
+            var countdownElement = document.getElementById("countdown");
+            var expiredMessage = document.getElementById("expired-message");
+
+            if (timeLeftMilliseconds <= 0) {
+                countdownElement.classList.add('hidden');
+                expiredMessage.classList.remove('hidden');
+                return;
+            }
+
+            expiredMessage.classList.add('hidden');
+            countdownElement.classList.remove('hidden');
+
+            var interval = setInterval(function() {
+                var days = Math.floor(timeLeftMilliseconds / (1000 * 60 * 60 * 24));
+                var hours = Math.floor((timeLeftMilliseconds % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                var minutes = Math.floor((timeLeftMilliseconds % (1000 * 60 * 60)) / (1000 * 60));
+                var seconds = Math.floor((timeLeftMilliseconds % (1000 * 60)) / 1000);
+
+                countdownElement.innerHTML = days + "d " + hours + "h " + minutes + "m " + seconds + "s ";
+
+                timeLeftMilliseconds -= 1000;
+
+                if (timeLeftMilliseconds <= 0) {
+                    clearInterval(interval);
+                    countdownElement.classList.add('hidden');
+                    expiredMessage.classList.remove('hidden');
+                }
+            }, 1000);
+        }
+
+        // Initialize countdown only if time_left is positive
+        {% if time_left.total_seconds > 0 %}
+            updateCountdown();
+        {% endif %}
+    </script>
+</body>
+</html>
