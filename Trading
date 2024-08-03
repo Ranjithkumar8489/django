@@ -1,0 +1,71 @@
+# forms.py
+from django import forms
+from .models import Exchange
+
+class MyForm(forms.Form):
+    # Fetch choices from the model
+    exchange_choices = [(exchange.id, exchange.name) for exchange in Exchange.objects.all()]
+
+    exchange1 = forms.ChoiceField(choices=exchange_choices)
+    exchange2 = forms.ChoiceField(choices=exchange_choices)
+
+# views.py
+from django.shortcuts import render
+from .forms import MyForm
+from .models import Exchange
+
+def my_view(request):
+    # Fetch choices from the model
+    exchange_choices = [(exchange.id, exchange.name) for exchange in Exchange.objects.all()]
+
+    if request.method == 'POST':
+        form = MyForm(request.POST)
+        if form.is_valid():
+            # Extract values from the form
+            exchange1_id = form.cleaned_data.get('exchange1')
+            exchange2_id = form.cleaned_data.get('exchange2')
+            
+            # Get the corresponding Exchange objects
+            exchange1 = Exchange.objects.get(id=exchange1_id) if exchange1_id else None
+            exchange2 = Exchange.objects.get(id=exchange2_id) if exchange2_id else None
+            
+            context = {
+                'form': form,
+                'exchange1': exchange1,
+                'exchange2': exchange2,
+            }
+            return render(request, 'my_template.html', context)
+    else:
+        # Set default values for GET request
+        default_exchange1 = exchange_choices[0][0] if exchange_choices else None
+        default_exchange2 = exchange_choices[1][0] if len(exchange_choices) > 1 else None
+
+        # Create form instance with default values
+        form = MyForm(initial={
+            'exchange1': default_exchange1,
+            'exchange2': default_exchange2
+        })
+    
+    return render(request, 'my_template.html', {'form': form})
+
+<!-- my_template.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exchange Form</title>
+</head>
+<body>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Submit</button>
+    </form>
+
+    {% if exchange1 and exchange2 %}
+        <p>Exchange 1: {{ exchange1.name }}</p>
+        <p>Exchange 2: {{ exchange2.name }}</p>
+    {% endif %}
+</body>
+</html>
