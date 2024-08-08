@@ -1,0 +1,14 @@
+<IfModule mod_wsgi.c>
+    WSGIScriptAlias / /home/username/your_project_root/your_project/wsgi.py
+    WSGIPythonHome /home/username/your_virtualenv/
+    WSGIPythonPath /home/username/your_project_root/
+
+    <Directory /home/username/your_project_root/your_project>
+        <Files wsgi.py>
+            Require all granted
+        </Files>
+    </Directory>
+</IfModule>
+
+ErrorLog /home/username/logs/error.log
+CustomLog /home/username/logs/access.log combined
