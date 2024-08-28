@@ -1,0 +1,80 @@
+<?php
+defined('BASEPATH') OR exit('No direct script access allowed');
+
+class Bonus_model extends CI_Model {
+
+    public function incentive_bonus($monthly_data) {
+        // Initialize arrays to store the totals
+        $quarterly_totals = [];
+        $half_yearly_totals = [];
+        $yearly_totals = [];
+
+        // Initialize variables to store running totals
+        $quarter_total = 0;
+        $half_year_total = 0;
+        $year_total = 0;
+
+        // Track current quarter, half-year, and year
+        $current_quarter = 1;
+        $current_half_year = 1;
+        $current_year = '';
+
+        // Loop through each month in the data
+        foreach ($monthly_data as $month_year => $total_amount) {
+            // Extract month and year from the key
+            list($month, $year) = explode(' ', $month_year);
+
+            // Update the year total
+            if ($current_year !== $year) {
+                // Store previous year total
+                if ($current_year !== '') {
+                    $yearly_totals[$current_year] = $year_total;
+                }
+
+                // Reset year total for new year
+                $year_total = 0;
+                $current_year = $year;
+            }
+
+            // Add current month's amount to the running totals
+            $year_total += $total_amount;
+            $half_year_total += $total_amount;
+            $quarter_total += $total_amount;
+
+            // Get the numeric value of the month (1-12)
+            $month_num = date('n', strtotime("1 $month 2023"));
+
+            // Check if it's the end of a quarter
+            if ($month_num % 3 == 0) {
+                $quarterly_totals["Q$current_quarter $year"] = $quarter_total;
+                $quarter_total = 0; // Reset quarter total
+                $current_quarter++;
+                if ($current_quarter > 4) {
+                    $current_quarter = 1; // Reset quarter count for new year
+                }
+            }
+
+            // Check if it's the end of a half-year
+            if ($month_num % 6 == 0) {
+                $half_yearly_totals["H$current_half_year $year"] = $half_year_total;
+                $half_year_total = 0; // Reset half-year total
+                $current_half_year++;
+                if ($current_half_year > 2) {
+                    $current_half_year = 1; // Reset half-year count for new year
+                }
+            }
+        }
+
+        // Store the last year total
+        if ($current_year !== '') {
+            $yearly_totals[$current_year] = $year_total;
+        }
+
+        // Return the calculated totals
+        return [
+            'quarterly_totals' => $quarterly_totals,
+            'half_yearly_totals' => $half_yearly_totals,
+            'yearly_totals' => $yearly_totals,
+        ];
+    }
+}
