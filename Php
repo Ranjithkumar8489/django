@@ -1,171 +1,115 @@
 <?php
 defined('BASEPATH') OR exit('No direct script access allowed');
 
-class Bonus_model extends CI_Model {
+class ManagerController extends CI_Controller {
 
-    public function incentive_bonus($monthly_data) {
-        // Initialize arrays to store the totals
-        $quarterly_totals = [];
-        $half_yearly_totals = [];
-        $yearly_totals = [];
+    public function __construct()
+    {
+        parent::__construct();
+        $this->load->model('Manager_model'); // Load the model
+    }
 
-        // Initialize variables to store running totals
-        $quarter_total = 0;
-        $half_year_total = 0;
-        $year_total = 0;
+    // Method to display the initial view with the manager dropdown
+    public function index()
+    {
+        $data['managers'] = $this->Manager_model->get_managers(); // Fetch all managers
 
-        // Track current quarter, half-year, and year
-        $current_quarter = 1;
-        $current_half_year = 1;
-        $current_year = '';
+        // Set default selected manager and influencer
+        // These values might typically come from a database or user input for an editing form
+        $data['selected_manager'] = 1; // Replace with dynamic data, e.g., from session or database
+        $data['selected_influencer'] = 2; // Replace with dynamic data, e.g., from session or database
 
-        // Loop through each month in the data
-        foreach ($monthly_data as $month_year => $total_amount) {
-            // Extract month and year from the key
-            list($month, $year) = explode(' ', $month_year);
+        $this->load->view('select_manager_view', $data); // Load the view with managers and default values
+    }
 
-            // Update the year total
-            if ($current_year !== $year) {
-                // Store previous year total
-                if ($current_year !== '') {
-                    $yearly_totals[$current_year] = $year_total;
-                }
+    // Method to get influencers based on manager ID and generate HTML options
+    public function get_influencers_by_manager()
+    {
+        $manager_id = $this->input->post('manager_id'); // Get the manager ID from POST request
+        $selected_influencer = $this->input->post('selected_influencer'); // Get selected influencer ID if any
 
-                // Reset year total for new year
-                $year_total = 0;
-                $current_year = $year;
-            }
+        $influencers = $this->Manager_model->get_influencers_by_manager($manager_id); // Fetch influencers
 
-            // Add current month's amount to the running totals
-            $year_total += $total_amount;
-            $half_year_total += $total_amount;
-            $quarter_total += $total_amount;
-
-            // Get the numeric value of the month (1-12)
-            $month_num = date('n', strtotime("1 $month 2023"));
-
-            // Check if it's the end of a quarter
-            if ($month_num % 3 == 0) {
-                $quarterly_totals["Q$current_quarter $year"] = $quarter_total;
-                $quarter_total = 0; // Reset quarter total
-                $current_quarter++;
-                if ($current_quarter > 4) {
-                    $current_quarter = 1; // Reset quarter count for new year
-                }
-            }
-
-            // Check if it's the end of a half-year
-            if ($month_num % 6 == 0) {
-                $half_yearly_totals["H$current_half_year $year"] = $half_year_total;
-                $half_year_total = 0; // Reset half-year total
-                $current_half_year++;
-                if ($current_half_year > 2) {
-                    $current_half_year = 1; // Reset half-year count for new year
-                }
-            }
+        // Generate HTML options for influencers
+        $options = '<option value="">Select an influencer</option>';
+        foreach ($influencers as $influencer) {
+            $selected = ($influencer->id == $selected_influencer) ? ' selected="selected"' : ''; // Set selected attribute
+            $options .= '<option value="' . $influencer->id . '"' . $selected . '>' . $influencer->name . '</option>';
         }
 
-        // Store the last year total
-        if ($current_year !== '') {
-            $yearly_totals[$current_year] = $year_total;
-        }
-
-        // Return the calculated totals
-        return [
-            'quarterly_totals' => $quarterly_totals,
-            'half_yearly_totals' => $half_yearly_totals,
-            'yearly_totals' => $yearly_totals,
-        ];
+        echo $options; // Output the options HTML directly
     }
 }
+?>
 
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Select Manager and Influencer</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+</head>
+<body>
 
-<?php
-defined('BASEPATH') OR exit('No direct script access allowed');
+<h1>Select a Manager and Influencer</h1>
 
-class Bonus_model extends CI_Model {
+<form action="your_form_action_url" method="post"> <!-- Replace with your form action URL -->
+    <label for="manager">Choose a manager:</label>
+    <select name="manager" id="manager">
+        <option value="">Select a manager</option>
+        <?php foreach($managers as $manager): ?>
+            <option value="<?php echo $manager->id; ?>" <?php echo ($manager->id == $selected_manager) ? 'selected="selected"' : ''; ?>>
+                <?php echo $manager->name; ?>
+            </option>
+        <?php endforeach; ?>
+    </select>
+    
+    <br><br>
 
-    // Define the bound function to add 10% to the total and return it
-    private function bound_function($label, $total) {
-        // Add 10% to the total
-        $total_with_bonus = $total * 1.10;
+    <label for="influencer">Choose an influencer:</label>
+    <select name="influencer" id="influencer">
+        <option value="">Select an influencer</option>
+        <!-- Options will be populated dynamically using AJAX -->
+    </select>
+    
+    <br><br>
 
-        // Return the modified total
-        return $total_with_bonus;
+    <input type="submit" value="Submit">
+</form>
+
+<script type="text/javascript">
+$(document).ready(function(){
+    // Function to load influencers based on the selected manager
+    function loadInfluencers(manager_id, selected_influencer) {
+        if (manager_id != '') { // Check if a manager is selected
+            $.ajax({
+                url: "<?php echo base_url('ManagerController/get_influencers_by_manager'); ?>", // URL to fetch influencers
+                method: "POST",
+                data: {manager_id: manager_id, selected_influencer: selected_influencer}, // Send manager ID and selected influencer to the server
+                success: function(data){
+                    $('#influencer').html(data); // Set the returned options HTML directly
+                }
+            });
+        } else {
+            $('#influencer').html('<option value="">Select an influencer</option>'); // Reset if no manager is selected
+        }
     }
 
-    public function incentive_bonus($monthly_data) {
-        // Initialize arrays to store the totals
-        $quarterly_totals = [];
-        $half_yearly_totals = [];
-        $yearly_totals = [];
+    // Trigger AJAX when manager is selected
+    $('#manager').change(function(){
+        var manager_id = $(this).val(); // Get the selected manager ID
+        loadInfluencers(manager_id, ""); // Load influencers without a pre-selected value
+    });
 
-        // Initialize variables to store running totals
-        $quarter_total = 0;
-        $half_year_total = 0;
-        $year_total = 0;
+    // On page load, check if a manager is already selected and load its influencers
+    var preselected_manager_id = $('#manager').val(); // Get the pre-selected manager ID
+    var preselected_influencer_id = "<?php echo isset($selected_influencer) ? $selected_influencer : ''; ?>"; // Get the pre-selected influencer ID
 
-        // Track current quarter, half-year, and year
-        $current_quarter = 1;
-        $current_half_year = 1;
-        $current_year = '';
-
-        // Loop through each month in the data
-        foreach ($monthly_data as $month_year => $total_amount) {
-            // Extract month and year from the key
-            list($month, $year) = explode(' ', $month_year);
-
-            // Update the year total
-            if ($current_year !== $year) {
-                // Store previous year total
-                if ($current_year !== '') {
-                    $yearly_totals[$current_year] = $this->bound_function("Yearly total for $current_year", $year_total);
-                }
-
-                // Reset year total for new year
-                $year_total = 0;
-                $current_year = $year;
-            }
-
-            // Add current month's amount to the running totals
-            $year_total += $total_amount;
-            $half_year_total += $total_amount;
-            $quarter_total += $total_amount;
-
-            // Get the numeric value of the month (1-12)
-            $month_num = date('n', strtotime("1 $month 2023"));
-
-            // Check if it's the end of a quarter
-            if ($month_num % 3 == 0) {
-                $quarterly_totals["Q$current_quarter $year"] = $this->bound_function("Quarterly total for Q$current_quarter $year", $quarter_total);
-                $quarter_total = 0; // Reset quarter total
-                $current_quarter++;
-                if ($current_quarter > 4) {
-                    $current_quarter = 1; // Reset quarter count for new year
-                }
-            }
-
-            // Check if it's the end of a half-year
-            if ($month_num % 6 == 0) {
-                $half_yearly_totals["H$current_half_year $year"] = $this->bound_function("Half-yearly total for H$current_half_year $year", $half_year_total);
-                $half_year_total = 0; // Reset half-year total
-                $current_half_year++;
-                if ($current_half_year > 2) {
-                    $current_half_year = 1; // Reset half-year count for new year
-                }
-            }
-        }
-
-        // Store the last year total
-        if ($current_year !== '') {
-            $yearly_totals[$current_year] = $this->bound_function("Yearly total for $current_year", $year_total);
-        }
-
-        // Return the calculated totals
-        return [
-            'quarterly_totals' => $quarterly_totals,
-            'half_yearly_totals' => $half_yearly_totals,
-            'yearly_totals' => $yearly_totals,
-        ];
+    if (preselected_manager_id != '') {
+        loadInfluencers(preselected_manager_id, preselected_influencer_id); // Load influencers with pre-selected value
     }
-}
+});
+</script>
+
+</body>
+</html>
+
