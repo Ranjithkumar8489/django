@@ -113,3 +113,127 @@ $(document).ready(function(){
 </body>
 </html>
 
+
+
+<?php
+defined('BASEPATH') OR exit('No direct script access allowed');
+
+class DateController extends CI_Controller {
+
+    public function __construct() {
+        parent::__construct();
+        $this->load->helper(array('form', 'url'));
+        $this->load->library('form_validation');
+    }
+
+    public function index() {
+        // Load the form view
+        $this->load->view('date_form');
+    }
+
+    public function submit_dates() {
+        // Get the selected date option
+        $date_option = $this->input->post('date_option');
+
+        // Set validation rules based on the selected option
+        if ($date_option === 'custom') {
+            $this->form_validation->set_rules('start_date', 'Start Date', 'required');
+            $this->form_validation->set_rules('end_date', 'End Date', 'required|callback_check_end_date');
+        }
+
+        if ($this->form_validation->run() == FALSE) {
+            // If validation fails, reload the form with error messages
+            $this->load->view('date_form');
+        } else {
+            // If validation succeeds, process the form data (e.g., save to database)
+            $data['date_option'] = $date_option;
+            $data['start_date'] = $this->input->post('start_date');
+            $data['end_date'] = $this->input->post('end_date');
+
+            // Load a success view with date data
+            $this->load->view('success', $data);
+        }
+    }
+
+    // Custom validation callback to check if end date is after start date
+    public function check_end_date($end_date) {
+        $start_date = $this->input->post('start_date');
+
+        // Check if end date is after start date
+        if (strtotime($end_date) < strtotime($start_date)) {
+            $this->form_validation->set_message('check_end_date', 'The End Date must be after the Start Date.');
+            return FALSE;
+        }
+        return TRUE;
+    }
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Date Form</title>
+    <script>
+        function toggleDateFields() {
+            var dateOption = document.getElementById("date_option").value;
+            var customDateFields = document.getElementById("custom_date_fields");
+
+            if (dateOption === "custom") {
+                customDateFields.style.display = "block";
+            } else {
+                customDateFields.style.display = "none";
+            }
+        }
+    </script>
+    <style>
+        .error {
+            color: red;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Date Form</h2>
+
+    <!-- Form -->
+    <?php echo form_open('datecontroller/submit_dates'); ?>
+        <p>
+            <label for="date_option">Select Date Range:</label>
+            <select name="date_option" id="date_option" onchange="toggleDateFields()">
+                <option value="today" <?php echo set_select('date_option', 'today'); ?>>Today</option>
+                <option value="last_week" <?php echo set_select('date_option', 'last_week'); ?>>Last Week</option>
+                <option value="custom" <?php echo set_select('date_option', 'custom'); ?>>Custom Date Range</option>
+            </select>
+        </p>
+
+        <div id="custom_date_fields" style="display: none;">
+            <p>
+                <!-- Display error for start date -->
+                <?php if (form_error('start_date')): ?>
+                    <div class="error"><?php echo form_error('start_date'); ?></div>
+                <?php endif; ?>
+                <label for="start_date">Start Date:</label>
+                <input type="date" name="start_date" id="start_date" value="<?php echo set_value('start_date'); ?>">
+            </p>
+            <p>
+                <!-- Display error for end date -->
+                <?php if (form_error('end_date')): ?>
+                    <div class="error"><?php echo form_error('end_date'); ?></div>
+                <?php endif; ?>
+                <label for="end_date">End Date:</label>
+                <input type="date" name="end_date" id="end_date" value="<?php echo set_value('end_date'); ?>">
+            </p>
+        </div>
+
+        <p>
+            <input type="submit" value="Submit">
+        </p>
+    <?php echo form_close(); ?>
+
+    <script>
+        // Set the display state of custom date fields based on the selected option
+        document.addEventListener('DOMContentLoaded', function() {
+            toggleDateFields(); // Initialize on page load based on the saved value
+        });
+    </script>
+</body>
+</html>
