@@ -1,0 +1,149 @@
+import requests
+import json
+import websocket
+import threading
+
+# Constants
+BYBIT_REST_API = "https://api.bybit.com/v2/public/symbols"
+BYBIT_WS_URL = "wss://stream.bybit.com/realtime_public"
+
+TRADING_FEES = 0.001  # 0.1% trading fee
+INITIAL_AMOUNT_USDT = 1000  # Initial amount in USDT to trade with
+
+# Global variables to store pairs and prices
+trading_pairs = []
+triangular_pairs = []
+prices = {}
+
+
+# Fetch available trading pairs from Bybit
+def fetch_trading_pairs():
+    global trading_pairs
+    response = requests.get(BYBIT_REST_API)
+    data = response.json()
+    
+    for symbol_info in data['result']:
+        symbol = symbol_info['name']
+        base = symbol_info['base_currency']
+        quote = symbol_info['quote_currency']
+        trading_pairs.append({'symbol': symbol, 'base': base, 'quote': quote})
+
+
+# Find triangular arbitrage pairs dynamically
+def find_triangular_pairs():
+    global triangular_pairs
+    assets = set()  # Collect all unique assets
+    
+    for pair in trading_pairs:
+        assets.add(pair['base'])
+        assets.add(pair['quote'])
+
+    # Now generate the triangular arbitrage pairs
+    for a in assets:
+        for b in assets:
+            if a == b:
+                continue
+            for c in assets:
+                if a == c or b == c:
+                    continue
+
+                # Check if pairs (a/b, b/c, a/c) exist
+                ab = f"{a}{b}"
+                bc = f"{b}{c}"
+                ac = f"{a}{c}"
+                
+                if any(p['symbol'] == ab for p in trading_pairs) and \
+                   any(p['symbol'] == bc for p in trading_pairs) and \
+                   any(p['symbol'] == ac for p in trading_pairs):
+                    triangular_pairs.append((ab, bc, ac))
+
+    print(f"Found {len(triangular_pairs)} triangular pairs!")
+
+
+# WebSocket message handler
+def on_message(ws, message):
+    msg = json.loads(message)
+
+    if 'topic' in msg and 'data' in msg:
+        data = msg['data'][0]
+        symbol = data['s']
+        price = float(data['p'])
+        
+        # Store the latest price for the symbol
+        prices[symbol] = price
+
+    # Calculate arbitrage when prices for triangular pairs are available
+    for ab, bc, ac in triangular_pairs:
+        if ab in prices and bc in prices and ac in prices:
+            calculate_arbitrage(ab, bc, ac)
+
+
+# Function to calculate arbitrage opportunity
+def calculate_arbitrage(ab, bc, ac):
+    # Check prices for the triangular pair
+    price_ab = prices[ab]
+    price_bc = prices[bc]
+    price_ac = prices[ac]
+
+    # Step 1: A -> B
+    amount_b = INITIAL_AMOUNT_USDT / price_ab
+
+    # Step 2: B -> C
+    amount_c = amount_b / price_bc
+
+    # Step 3: C -> A
+    final_amount_usdt = amount_c * price_ac
+
+    # Calculate profit
+    profit = final_amount_usdt * (1 - TRADING_FEES)**3 - INITIAL_AMOUNT_USDT
+
+    if profit > 0:
+        print(f"Arbitrage Opportunity Found! Profit: ${profit:.2f}")
+        print(f"Pairs: {ab} -> {bc} -> {ac}")
+    else:
+        print(f"No arbitrage opportunity for {ab} -> {bc} -> {ac}. Profit: ${profit:.2f}")
+
+
+# WebSocket connection setup
+def on_error(ws, error):
+    print(f"Error: {error}")
+
+def on_close(ws):
+    print("### WebSocket closed ###")
+
+def on_open(ws):
+    print("WebSocket connection opened")
+    
+    # Subscribe to price updates for the triangular pairs
+    subscribe_message = {
+        "op": "subscribe",
+        "args": [f"trade.{pair}" for triangle in triangular_pairs for pair in triangle]
+    }
+    ws.send(json.dumps(subscribe_message))
+
+
+# WebSocket connection in a separate thread
+def run_websocket():
+    websocket.enableTrace(True)
+    ws = websocket.WebSocketApp(
+        BYBIT_WS_URL,
+        on_message=on_message,
+        on_error=on_error,
+        on_close=on_close,
+        on_open=on_open
+    )
+    
+    ws.run_forever()
+
+
+# Main program
+if __name__ == "__main__":
+    # Step 1: Fetch trading pairs
+    fetch_trading_pairs()
+
+    # Step 2: Find triangular pairs
+    find_triangular_pairs()
+
+    # Step 3: Start WebSocket in a separate thread to monitor prices
+    ws_thread = threading.Thread(target=run_websocket)
+    ws_thread.start()
