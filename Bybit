@@ -1,217 +1,125 @@
 import ccxt
 import time
-from itertools import permutations
 
-# Initialize exchange
-exchange = ccxt.binance()
+# Initialize the exchange
+exchange = ccxt.binance({
+    'apiKey': 'YOUR_API_KEY',
+    'secret': 'YOUR_SECRET_KEY',
+    'enableRateLimit': True
+})
 
-# Constants
-MIN_PROFIT_THRESHOLD = 0.2  # Minimum profit threshold in percentage
-BASE_AMOUNT = 1.0  # Starting amount in the base currency
+# Define the pairs for triangular arbitrage
+pairs = {
+    'pair1': 'BTC/USDT',
+    'pair2': 'ETH/USDT',
+    'pair3': 'BTC/ETH'
+}
 
-# Function to fetch all available trading pairs
-def get_available_pairs():
-    markets = exchange.load_markets()
-    return list(markets.keys())
-
-# Function to find triangular pairs
-def find_triangular_pairs():
-    pairs = get_available_pairs()
-    triangular_pairs = []
-    symbols = set()
-
-    # Extract unique symbols from the trading pairs
-    for pair in pairs:
-        base, quote = pair.split('/')
-        symbols.add(base)
-        symbols.add(quote)
-
-    # Check for triangular opportunities
-    for combo in permutations(symbols, 3):  # Generate all possible 3 currency combinations
-        a, b, c = combo
-        pair1 = f'{a}/{b}'
-        pair2 = f'{b}/{c}'
-        pair3 = f'{c}/{a}'
-
-        if pair1 in pairs and pair2 in pairs and pair3 in pairs:
-            triangular_pairs.append((pair1, pair2, pair3))
-
-    return triangular_pairs
-
-# Function to fetch order book for a pair and check liquidity
-def fetch_order_book(pair, required_volume):
+# Function to fetch the current order book for all pairs
+def get_order_books():
     try:
-        order_book = exchange.fetch_order_book(pair)
-        bids = order_book['bids'] if len(order_book['bids']) > 0 else []
-        asks = order_book['asks'] if len(order_book['asks']) > 0 else []
-        
-        # Return the order book if there's liquidity to cover the required volume
-        return {
-            'bids': [bid for bid in bids if bid[1] >= required_volume],  # Filter bids with enough liquidity
-            'asks': [ask for ask in asks if ask[1] >= required_volume]   # Filter asks with enough liquidity
-        }
+        order_books = {pair_name: exchange.fetch_order_book(pair_symbol) for pair_name, pair_symbol in pairs.items()}
+        return order_books
     except Exception as e:
-        print(f"Error fetching order book for {pair}: {str(e)}")
+        print(f"Error fetching order books: {e}")
         return None
 
-# Function to determine the best price for a given pair and direction
-def get_best_price(order_book, direction, amount_needed):
-    """
-    Function to get the best price based on liquidity available.
-    If direction is 'buy', get the ask price.
-    If direction is 'sell', get the bid price.
-    """
-    total_volume = 0
-    total_cost = 0
-    orders = order_book['asks'] if direction == 'buy' else order_book['bids']
-    
-    for price, volume in orders:
-        if total_volume + volume >= amount_needed:
-            # The order has enough volume to cover the remaining amount needed
-            total_cost += (amount_needed - total_volume) * price
-            total_volume = amount_needed
-            break
-        else:
-            # Add the entire order and continue
-            total_cost += volume * price
-            total_volume += volume
-
-    # If we cannot satisfy the needed volume from the order book, return None
-    if total_volume < amount_needed:
-        return None
-
-    return total_cost / total_volume
-
-# Function to calculate arbitrage opportunities for all six possible strategies
-def advanced_calculate_arbitrage(pair1, pair2, pair3, base_amount):
-    """
-    This function calculates arbitrage opportunities across three pairs with all six possible trading directions.
-    It dynamically handles buy/sell actions for each leg of the arbitrage and considers liquidity and slippage.
-    
-    :param pair1: First currency pair (e.g., A/B)
-    :param pair2: Second currency pair (e.g., B/C)
-    :param pair3: Third currency pair (e.g., C/A)
-    :param base_amount: Starting amount in the base currency
-    :return: Trade plan, profit percentage, and ROI if arbitrage opportunity exists, None otherwise
-    """
+# Function to check if there is an arbitrage opportunity
+def calculate_arbitrage(order_books):
     try:
-        # Fetch order books for the three pairs
-        book1 = fetch_order_book(pair1, base_amount)
-        book2 = fetch_order_book(pair2, base_amount)
-        book3 = fetch_order_book(pair3, base_amount)
+        # Get the best bid and ask prices for the pairs
+        btc_usdt_bid = order_books['pair1']['bids'][0][0]
+        btc_usdt_ask = order_books['pair1']['asks'][0][0]
+        eth_usdt_bid = order_books['pair2']['bids'][0][0]
+        eth_usdt_ask = order_books['pair2']['asks'][0][0]
+        btc_eth_bid = order_books['pair3']['bids'][0][0]
+        btc_eth_ask = order_books['pair3']['asks'][0][0]
 
-        if not (book1 and book2 and book3):
-            return None
+        # Calculate cross rates
+        forward_rate = btc_usdt_bid / btc_eth_ask * eth_usdt_bid
+        forward_profit = forward_rate - 1
 
-        # Six possible trading strategies
-        trade_strategies = [
-            {"trade1": "buy", "trade2": "buy", "trade3": "sell"},   # Buy-Buy-Sell
-            {"trade1": "buy", "trade2": "sell", "trade3": "sell"},  # Buy-Sell-Sell
-            {"trade1": "sell", "trade2": "sell", "trade3": "buy"},  # Sell-Sell-Buy
-            {"trade1": "sell", "trade2": "buy", "trade3": "buy"},   # Sell-Buy-Buy
-            {"trade1": "sell", "trade2": "buy", "trade3": "sell"},  # Sell-Buy-Sell
-            {"trade1": "buy", "trade2": "sell", "trade3": "buy"},   # Buy-Sell-Buy
-        ]
+        reverse_rate = eth_usdt_ask * btc_eth_bid / btc_usdt_ask
+        reverse_profit = reverse_rate - 1
 
-        def execute_trade_strategy(strategy, starting_amount):
-            """
-            Execute the specified strategy (buy/sell for each leg) and return the final amount and prices.
-            """
-            amount = starting_amount
-            trade_details = []
-
-            for i, (pair, direction) in enumerate(zip([pair1, pair2, pair3], [strategy['trade1'], strategy['trade2'], strategy['trade3']])):
-                if direction == "buy":
-                    price = get_best_price(fetch_order_book(pair, amount), "buy", amount)
-                    if price is None:
-                        return None, None
-                    # Calculate how much of the next currency we receive
-                    amount_received = amount / price
-                    trade_details.append({
-                        "pair": pair,
-                        "action": "buy",
-                        "price": price,
-                        "amount_spent": amount,
-                        "amount_received": amount_received
-                    })
-                    amount = amount_received
-                elif direction == "sell":
-                    price = get_best_price(fetch_order_book(pair, amount), "sell", amount)
-                    if price is None:
-                        return None, None
-                    # Calculate how much of the next currency we receive
-                    amount_received = amount * price
-                    trade_details.append({
-                        "pair": pair,
-                        "action": "sell",
-                        "price": price,
-                        "amount_spent": amount,
-                        "amount_received": amount_received
-                    })
-                    amount = amount_received
-
-            return amount, trade_details
-
-        # Loop through each possible strategy to find the most profitable one
-        best_trade_plan = None
-        best_profit_percentage = -float("inf")
-        best_roi = -float("inf")
-
-        for strategy in trade_strategies:
-            final_amount, trade_plan = execute_trade_strategy(strategy, base_amount)
-
-            if final_amount is None or trade_plan is None:
-                continue
-
-            # Calculate profit percentage
-            profit_percentage = (final_amount - base_amount) / base_amount * 100
-
-            # Calculate ROI
-            roi = (final_amount - base_amount) / base_amount * 100
-
-            # If this strategy is the best so far, store it
-            if profit_percentage > best_profit_percentage:
-                best_profit_percentage = profit_percentage
-                best_roi = roi
-                best_trade_plan = trade_plan
-
-        # Return the best trade plan if profitable
-        if best_profit_percentage > MIN_PROFIT_THRESHOLD:
-            return {
-                "profit_percentage": best_profit_percentage,
-                "roi": best_roi,
-                "trade_plan": best_trade_plan
-            }
-
-        return None
-
+        return forward_profit, reverse_profit
     except Exception as e:
-        print(f"Error calculating arbitrage for {pair1}, {pair2}, {pair3}: {str(e)}")
-        return None
+        print(f"Error calculating arbitrage: {e}")
+        return None, None
 
-# Function to find arbitrage opportunities and execute them if profitable
-def find_arbitrage_opportunities():
-    triangular_pairs = find_triangular_pairs()
-    print(f"Found {len(triangular_pairs)} triangular pairs to check.")
-    
-    for pair1, pair2, pair3 in triangular_pairs:
-        result = advanced_calculate_arbitrage(pair1, pair2, pair3, BASE_AMOUNT)
+# Function to place an order and return the filled amount
+def place_order(pair, side, amount, price):
+    try:
+        # Create order
+        order = exchange.create_order(pair, 'limit', side, amount, price)
+        print(f"Order placed: {order}")
 
-        if result:
-            print(f"Arbitrage Opportunity Found: {pair1} -> {pair2} -> {pair3}")
-            print(f"Profit: {result['profit_percentage']:.2f}%")
-            print(f"ROI: {result['roi']:.2f}%")
-            for trade in result['trade_plan']:
-                print(f"Trade: {trade['action']} {trade['pair']} at price {trade['price']} | Amount Spent: {trade['amount_spent']} | Amount Received: {trade['amount_received']}")
-        else:
-            print(f"No arbitrage opportunity for {pair1}, {pair2}, {pair3}")
+        # Check for filled amount
+        order_id = order['id']
+        time.sleep(2)  # Wait for the order to be filled
+        order_info = exchange.fetch_order(order_id, pair)
+        filled_amount = order_info['filled']
+        return filled_amount
+    except Exception as e:
+        print(f"Order placement failed: {e}")
+        return 0
 
-# Main loop to continuously check for opportunities
-def main():
+# Function to execute the arbitrage trades
+def execute_arbitrage(order_books, initial_amount):
+    forward_profit, reverse_profit = calculate_arbitrage(order_books)
+
+    # Check for the best arbitrage opportunity
+    if forward_profit > 0:
+        print(f"Forward Arbitrage Opportunity: {forward_profit:.5f}")
+
+        # Execute USDT -> BTC -> ETH -> USDT
+        btc_usdt_price = order_books['pair1']['bids'][0][0]
+        eth_usdt_price = order_books['pair2']['bids'][0][0]
+        btc_eth_price = order_books['pair3']['asks'][0][0]
+
+        # Step 1: Buy BTC with USDT
+        btc_amount = place_order(pairs['pair1'], 'buy', initial_amount, btc_usdt_price)
+
+        # Step 2: Use bought BTC to buy ETH
+        if btc_amount > 0:
+            eth_amount = place_order(pairs['pair3'], 'buy', btc_amount, btc_eth_price)
+
+            # Step 3: Sell ETH back to USDT
+            if eth_amount > 0:
+                place_order(pairs['pair2'], 'sell', eth_amount, eth_usdt_price)
+
+    elif reverse_profit > 0:
+        print(f"Reverse Arbitrage Opportunity: {reverse_profit:.5f}")
+
+        # Execute USDT -> ETH -> BTC -> USDT
+        eth_usdt_price = order_books['pair2']['asks'][0][0]
+        btc_usdt_price = order_books['pair1']['asks'][0][0]
+        btc_eth_price = order_books['pair3']['bids'][0][0]
+
+        # Step 1: Buy ETH with USDT
+        eth_amount = place_order(pairs['pair2'], 'buy', initial_amount, eth_usdt_price)
+
+        # Step 2: Use bought ETH to buy BTC
+        if eth_amount > 0:
+            btc_amount = place_order(pairs['pair3'], 'sell', eth_amount, btc_eth_price)
+
+            # Step 3: Sell BTC back to USDT
+            if btc_amount > 0:
+                place_order(pairs['pair1'], 'sell', btc_amount, btc_usdt_price)
+
+    else:
+        print("No arbitrage opportunity found.")
+
+# Main loop to run the arbitrage strategy
+def triangular_arbitrage_loop():
     while True:
-        find_arbitrage_opportunities()
-        time.sleep(10)  # Check every 10 seconds
+        try:
+            order_books = get_order_books()
+            if order_books:
+                execute_arbitrage(order_books, initial_amount=50)  # Adjust initial_amount as needed
+            time.sleep(5)  # Adjust sleep time to avoid rate limiting
+        except Exception as e:
+            print(f"Error in arbitrage loop: {e}")
 
-# Run the program
-if __name__ == "__main__":
-    main()
+# Start the arbitrage loop
+triangular_arbitrage_loop()
