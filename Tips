@@ -1,0 +1,19 @@
+# Example: Placing a limit buy order with scientific notation
+
+# Original values in scientific notation
+symbol = 'BTC/USDT'
+amount = 1.23e-5  # Original amount: 0.0000123 BTC
+price = 2.5e4     # Original price: 25000 USDT
+
+# Format to exchange precision
+formatted_amount = exchange.amount_to_precision(symbol, amount)
+formatted_price = exchange.price_to_precision(symbol, price)
+
+# Place the order with formatted values
+order = exchange.create_limit_buy_order(
+    symbol=symbol,
+    amount=formatted_amount,
+    price=formatted_price
+)
+
+print(order)
