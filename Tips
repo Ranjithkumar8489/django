@@ -17,3 +17,60 @@ order = exchange.create_limit_buy_order(
 )
 
 print(order)
+
+tips 2
+
+
+import ccxt
+
+# Instantiate the exchange (Binance in this case)
+exchange = ccxt.binance({
+    'apiKey': 'YOUR_API_KEY',
+    'secret': 'YOUR_SECRET',
+})
+
+# Define the trading pairs for triangular arbitrage
+symbol1 = 'BTC/USDT'  # Buy BTC with USDT
+symbol2 = 'ETH/BTC'   # Buy ETH with BTC
+symbol3 = 'ETH/USDT'  # Sell ETH for USDT
+
+# Starting amount in USDT
+initial_amount = 1000  # Example starting amount
+
+# Fetch the order books for each pair
+order_book1 = exchange.fetch_order_book(symbol1)
+order_book2 = exchange.fetch_order_book(symbol2)
+order_book3 = exchange.fetch_order_book(symbol3)
+
+# Step 1: Convert USDT to BTC (Buy BTC)
+price1 = order_book1['asks'][0][0]  # Best ask price to buy BTC
+amount_btc = initial_amount / price1  # BTC amount after buying
+
+# Step 2: Convert BTC to ETH (Buy ETH)
+price2 = order_book2['asks'][0][0]  # Best ask price to buy ETH with BTC
+amount_eth = amount_btc / price2    # ETH amount after converting BTC to ETH
+
+# Step 3: Convert ETH to USDT (Sell ETH)
+price3 = order_book3['bids'][0][0]  # Best bid price to sell ETH for USDT
+final_amount_usdt = amount_eth * price3  # Final amount of USDT after selling ETH
+
+# Calculate the profit
+profit = final_amount_usdt - initial_amount
+
+# Output the results
+print(f"Initial USDT: {initial_amount}")
+print(f"Final USDT: {final_amount_usdt}")
+print(f"Profit: {profit} USDT")
+
+# Check if arbitrage is profitable and execute trades
+if profit > 0:
+    # Execute Step 1: Buy BTC with USDT
+    exchange.create_limit_buy_order(symbol1, amount_btc, price1)
+    
+    # Execute Step 2: Buy ETH with BTC
+    exchange.create_limit_buy_order(symbol2, amount_eth, price2)
+    
+    # Execute Step 3: Sell ETH for USDT
+    exchange.create_limit_sell_order(symbol3, amount_eth, price3)
+else:
+    print("No profitable arbitrage opportunity found.")
