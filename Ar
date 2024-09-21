@@ -1,0 +1,56 @@
+import ccxt
+import time
+from itertools import permutations
+
+# Initialize the exchange
+exchange = ccxt.binance({
+    'apiKey': 'YOUR_API_KEY',
+    'secret': 'YOUR_API_SECRET'
+})
+
+# Define trading pairs and entry amount
+symbols = ['BTC/USDT', 'ETH/USDT', 'ETH/BTC']
+entry_amount = 100  # Initial amount in base currency
+
+def fetch_orderbook(symbol):
+    """Fetch the order book for a given symbol."""
+    try:
+        orderbook = exchange.fetch_order_book(symbol)
+        return {
+            'bid': orderbook['bids'][0][0] if orderbook['bids'] else None,
+            'ask': orderbook['asks'][0][0] if orderbook['asks'] else None
+        }
+    except Exception as e:
+        print(f"Error fetching orderbook for {symbol}: {e}")
+        return {'bid': None, 'ask': None}
+
+def check_arbitrage():
+    """Check for triangular arbitrage opportunities."""
+    market_data = {symbol: fetch_orderbook(symbol) for symbol in symbols}
+    
+    for path in permutations(symbols, 3):
+        data1, data2, data3 = (market_data[path[0]], market_data[path[1]], market_data[path[2]])
+
+        # Calculate amounts and profits for each path
+        if all([data1['ask'], data2['ask'], data3['bid']]):
+            first_amount = entry_amount / data1['ask']
+            second_amount = first_amount / data2['ask']
+            final_amount = second_amount * data3['bid']
+            profit = final_amount - entry_amount
+            
+            if profit > 0:
+                roi = (profit / entry_amount) * 100
+                print(f"Opportunity: {path[0]} -> {path[1]} -> {path[2]}")
+                print(f"Starting Amount: {entry_amount:.2f}, Ending Amount: {final_amount:.2f}, Profit: {profit:.2f} (ROI: {roi:.2f}%)")
+                
+                # Create orders
+                order1 = exchange.create_market_order(path[0], 'buy', first_amount)
+                order2 = exchange.create_market_order(path[1], 'buy', second_amount)
+                order3 = exchange.create_market_order(path[2], 'sell', final_amount)
+                
+                print(f"Orders: Buy {path[0]} ID: {order1['id']}, Buy {path[1]} ID: {order2['id']}, Sell {path[2]} ID: {order3['id']}")
+
+# Main loop
+while True:
+    check_arbitrage()
+    time.sleep(5)  # Adjust sleep time as needed
