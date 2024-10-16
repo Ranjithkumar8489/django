@@ -1,0 +1,254 @@
+Here is the full code for the 8 triangular arbitrage scenarios:
+
+```
+import pybit
+from pybit import HTTP
+import time
+
+# Set up API credentials
+api_key = "YOUR_API_KEY"
+api_secret = "YOUR_API_SECRET"
+
+# Set up symbols for triangular arbitrage
+symbols = ["BTCUSDT", "ETHUSDT", "ETHBTC"]
+
+# Set up exchange and API connection
+exchange = HTTP(api_key, api_secret)
+
+# Define triangular arbitrage function
+def triangular_arbitrage(scenario):
+    # Get exchange rates
+    btc_usdt_ask = exchange.get_ticker(symbol=symbols[0])["ask_price"]
+    btc_usdt_bid = exchange.get_ticker(symbol=symbols[0])["bid_price"]
+    eth_usdt_ask = exchange.get_ticker(symbol=symbols[1])["ask_price"]
+    eth_usdt_bid = exchange.get_ticker(symbol=symbols[1])["bid_price"]
+    eth_btc_ask = exchange.get_ticker(symbol=symbols[2])["ask_price"]
+    eth_btc_bid = exchange.get_ticker(symbol=symbols[2])["bid_price"]
+
+    # Calculate arbitrage ratio based on scenario
+    if scenario == 1:  
+        arbitrage_ratio = (eth_usdt_ask * eth_btc_ask * btc_usdt_bid) - 1
+    elif scenario == 2:  
+        arbitrage_ratio = (eth_usdt_ask * eth_btc_ask / btc_usdt_ask) - 1
+    elif scenario == 3:  
+        arbitrage_ratio = (eth_usdt_ask / eth_btc_bid * btc_usdt_bid) - 1
+    elif scenario == 4:  
+        arbitrage_ratio = (eth_usdt_ask / eth_btc_bid / btc_usdt_ask) - 1
+    elif scenario == 5:  
+        arbitrage_ratio = (1 / eth_usdt_bid * eth_btc_ask * btc_usdt_bid) - 1
+    elif scenario == 6:  
+        arbitrage_ratio = (1 / eth_usdt_bid * eth_btc_ask / btc_usdt_ask) - 1
+    elif scenario == 7:  
+        arbitrage_ratio = (1 / eth_usdt_bid / eth_btc_bid * btc_usdt_bid) - 1
+    elif scenario == 8:  
+        arbitrage_ratio = (1 / eth_usdt_bid / eth_btc_bid / btc_usdt_ask) - 1
+
+    # Check for arbitrage opportunity
+    if arbitrage_ratio > 0.005:  
+        # Get available balance
+        available_balance = exchange.get_wallet_balance()["USDT"]["available_balance"]
+
+        # Calculate optimal quantity
+        min_order_size = 0.01  
+        max_order_size = 100  
+        lot_size = 0.01  
+
+        if scenario == 1:
+            optimal_qty = min(max_order_size, max(min_order_size, available_balance / eth_usdt_ask))
+            qty_eth_btc = optimal_qty / eth_btc_ask
+            qty_btc_usdt = qty_eth_btc / btc_usdt_bid
+        elif scenario == 2:
+            optimal_qty = min(max_order_size, max(min_order_size, available_balance / eth_usdt_ask))
+            qty_eth_btc = optimal_qty / eth_btc_ask
+            qty_btc_usdt = qty_eth_btc * btc_usdt_ask
+        elif scenario == 3:
+            optimal_qty = min(max_order_size, max(min_order_size, available_balance / eth_usdt_ask))
+            qty_eth_btc = optimal_qty * eth_btc_bid
+            qty_btc_usdt = qty_eth_btc / btc_usdt_bid
+        elif scenario == 4:
+            optimal_qty = min(max_order_size, max(min_order_size, available_balance / eth_usdt_ask))
+            qty_eth_btc = optimal_qty * eth_btc_bid
+            qty_btc_usdt = qty_eth_btc * btc_usdt_ask
+        elif scenario == 5:
+            optimal_qty = min(max_order_size, max(min_order_size, available_balance / eth_usdt_bid))
+            qty_eth_btc = optimal_qty / eth_btc_ask
+            qty_btc_usdt = qty_eth_btc / btc_usdt_bid
+        elif scenario == 6:
+            optimal_qty = min(max_order_size, max(min_order_size, available_balance / eth_usdt_bid))
+            qty_eth_btc = optimal_qty / eth_btc_ask
+            qty_btc_usdt = qty_eth_btc * btc_usdt_ask
+        elif scenario == 7:
+            optimal_qty = min(max_order_size, max(min_order_size, available_balance / eth_usdt_bid))
+            qty_eth_btc = optimal_qty * eth_btc_bid
+            qty_btc_usdt = qty_eth_btc / btc_usdt_bid
+        elif scenario == 8:
+            optimal_qty
+```
+
+Here is the rest of the code:
+
+```
+        elif scenario == 8:
+            optimal_qty = min(max_order_size, max(min_order_size, available_balance / eth_usdt_bid))
+            qty_eth_btc = optimal_qty * eth_btc_bid
+            qty_btc_usdt = qty_eth_btc * btc_usdt_ask
+
+        optimal_qty = round(optimal_qty / lot_size) * lot_size
+
+        # Execute triangular arbitrage based on scenario
+        if scenario == 1:
+            # Buy ETH/USDT
+            exchange.place_active_order(symbol="ETHUSDT", side="Buy", type="Market", qty=optimal_qty)
+            # Buy ETH/BTC
+            exchange.place_active_order(symbol="ETHBTC", side="Buy", type="Market", qty=qty_eth_btc)
+            # Sell BTC/USDT
+            exchange.place_active_order(symbol="BTCUSDT", side="Sell", type="Market", qty=qty_btc_usdt)
+        elif scenario == 2:
+            # Buy ETH/USDT
+            exchange.place_active_order(symbol="ETHUSDT", side="Buy", type="Market", qty=optimal_qty)
+            # Buy ETH/BTC
+            exchange.place_active_order(symbol="ETHBTC", side="Buy", type="Market", qty=qty_eth_btc)
+            # Buy BTC/USDT
+            exchange.place_active_order(symbol="BTCUSDT", side="Buy", type="Market", qty=qty_btc_usdt)
+        elif scenario == 3:
+            # Buy ETH/USDT
+            exchange.place_active_order(symbol="ETHUSDT", side="Buy", type="Market", qty=optimal_qty)
+            # Sell ETH/BTC
+            exchange.place_active_order(symbol="ETHBTC", side="Sell", type="Market", qty=qty_eth_btc)
+            # Buy BTC/USDT
+            exchange.place_active_order(symbol="BTCUSDT", side="Buy", type="Market", qty=qty_btc_usdt)
+        elif scenario == 4:
+            # Buy ETH/USDT
+            exchange.place_active_order(symbol="ETHUSDT", side="Buy", type="Market", qty=optimal_qty)
+            # Sell ETH/BTC
+            exchange.place_active_order(symbol="ETHBTC", side="Sell", type="Market", qty=qty_eth_btc)
+            # Sell BTC/USDT
+            exchange.place_active_order(symbol="BTCUSDT", side="Sell", type="Market", qty=qty_btc_usdt)
+        elif scenario == 5:
+            # Sell ETH/USDT
+            exchange.place_active_order(symbol="ETHUSDT", side="Sell", type="Market", qty=optimal_qty)
+            # Buy ETH/BTC
+            exchange.place_active_order(symbol="ETHBTC", side="Buy", type="Market", qty=qty_eth_btc)
+            # Buy BTC/USDT
+            exchange.place_active_order(symbol="BTCUSDT", side="Buy", type="Market", qty=qty_btc_usdt)
+        elif scenario == 6:
+            # Sell ETH/USDT
+            exchange.place_active_order(symbol="ETHUSDT", side="Sell", type="Market", qty=optimal_qty)
+            # Buy ETH/BTC
+            exchange.place_active_order(symbol="ETHBTC", side="Buy", type="Market", qty=qty_eth_btc)
+            # Sell BTC/USDT
+            exchange.place_active_order(symbol="BTCUSDT", side="Sell", type="Market", qty=qty_btc_usdt)
+        elif scenario == 7:
+            # Sell ETH/USDT
+            exchange.place_active_order(symbol="ETHUSDT", side="Sell", type="Market", qty=optimal_qty)
+            # Sell ETH/BTC
+            exchange.place_active_order(symbol="ETHBTC", side="Sell", type="Market", qty=qty_eth_btc)
+            # Buy BTC/USDT
+            exchange.place_active_order(symbol="BTCUSDT", side="Buy", type="Market", qty=qty_btc_usdt)
+        elif scenario == 8:
+            # Sell ETH/USDT
+            exchange.place_active_order(symbol="ETHUSDT", side="Sell", type="Market", qty=optimal_qty)
+            # Sell ETH/BTC
+            exchange.place_active_order(symbol="ETHBTC", side="Sell", type="Market", qty=qty_eth_btc)
+            # Sell BTC/USDT
+            exchange.place_active_order(symbol="BTCUSDT", side="Sell", type="Market", qty=qty_btc_usdt)
+
+        print(f"Arbitrage opportunity detected! Scenario: {scenario}")
+        print(f"Arbitrage ratio: {arbitrage_ratio:.4f}%")
+        print(f"Optimal quantity: {optimal_qty:.4f}")
+
+    else:
+        print(f"No arbitrage opportunity found. Scenario: {scenario}")
+
+# Run triangular
+```
+
+
+
+
+
+
+
+
+Here are the correct quantity calculations for all 8 triangular arbitrage scenarios:
+
+*Scenario 1: Buy-Buy-Buy*
+```
+optimal_qty = min(max_order_size, max(min_order_size, available_balance / eth_usdt_ask))
+qty_eth_btc = optimal_qty / eth_btc_ask
+qty_btc_usdt = qty_eth_btc / btc_usdt_bid
+```
+
+*Scenario 2: Buy-Buy-Sell*
+```
+optimal_qty = min(max_order_size, max(min_order_size, available_balance / eth_usdt_ask))
+qty_eth_btc = optimal_qty / eth_btc_ask
+qty_btc_usdt = qty_eth_btc * btc_usdt_ask
+```
+
+*Scenario 3: Buy-Sell-Buy*
+```
+optimal_qty = min(max_order_size, max(min_order_size, available_balance / eth_usdt_ask))
+qty_eth_btc = optimal_qty * eth_btc_bid
+qty_btc_usdt = qty_eth_btc / btc_usdt_bid
+```
+
+*Scenario 4: Buy-Sell-Sell*
+```
+optimal_qty = min(max_order_size, max(min_order_size, available_balance / eth_usdt_ask))
+qty_eth_btc = optimal_qty * eth_btc_bid
+qty_btc_usdt = qty_eth_btc * btc_usdt_ask
+```
+
+*Scenario 5: Sell-Buy-Buy*
+```
+optimal_qty = min(max_order_size, max(min_order_size, available_balance / eth_usdt_bid))
+qty_eth_btc = optimal_qty / eth_btc_ask
+qty_btc_usdt = qty_eth_btc / btc_usdt_bid
+```
+
+*Scenario 6: Sell-Buy-Sell*
+```
+optimal_qty = min(max_order_size, max(min_order_size, available_balance / eth_usdt_bid))
+qty_eth_btc = optimal_qty / eth_btc_ask
+qty_btc_usdt = qty_eth_btc * btc_usdt_ask
+```
+
+*Scenario 7: Sell-Sell-Buy*
+```
+optimal_qty = min(max_order_size, max(min_order_size, available_balance / eth_usdt_bid))
+qty_eth_btc = optimal_qty * eth_btc_bid
+qty_btc_usdt = qty_eth_btc / btc_usdt_bid
+```
+
+*Scenario 8: Sell-Sell-Sell*
+```
+optimal_qty = min(max_order_size, max(min_order_size, available_balance / eth_usdt_bid))
+qty_eth_btc = optimal_qty * eth_btc_bid
+qty_btc_usdt = qty_eth_btc * btc_usdt_ask
+```
+
+Here's the updated code:
+```
+def triangular_arbitrage(scenario):
+    # ...
+    if arbitrage_ratio > 0.005:
+        available_balance = exchange.get_wallet_balance()["USDT"]["available_balance"]
+        min_order_size = 0.01
+        max_order_size = 100
+        lot_size = 0.01
+
+        if scenario == 1:
+            optimal_qty = min(max_order_size, max(min_order_size, available_balance / eth_usdt_ask))
+            qty_eth_btc = optimal_qty / eth_btc_ask
+            qty_btc_usdt = qty_eth_btc / btc_usdt_bid
+        elif scenario == 2:
+            optimal_qty = min(max_order_size, max(min_order_size, available_balance / eth_usdt_ask))
+            qty_eth_btc = optimal_qty / eth_btc_ask
+            qty_btc_usdt = qty_eth_btc * btc_usdt_ask
+        # ...
+
+        optimal_qty = round(optimal_qty / lot_size) * lot_size
+        # ...
+```
+Note that I've assumed the same lot size for all scenarios. You may need to adjust this based on the specific exchange requirements.
